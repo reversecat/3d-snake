@@ -1,8 +1,8 @@
 import * as THREE from "three";
 
-const BLOCKS_DIM_COUNT = 20;
+const BLOCKS_DIM_COUNT = 15;
+const HALF_BLOCKS_DIM_COUNT = Math.floor(BLOCKS_DIM_COUNT / 2);
 const MOVES_PER_SECOND = 8;
-const SCENE_COLOR = 0x34c9eb;
 const SNAKE_COLOR = 0x3aeb34;
 const FOOD_COLOR = 0xeb3434;
 
@@ -17,9 +17,11 @@ enum Direction {
 class Point {
 	x: number;
 	y: number;
-	constructor(x: number, y: number) {
+	z: number;
+	constructor(x: number, y: number, z: number = 0) {
 		this.x = x;
 		this.y = y;
+		this.z = z;
 	}
 	toStr = (): string => {
 		return this.x.toString() + "," + this.y.toString();
@@ -305,7 +307,7 @@ function gameLoop() {
 	function loop() {
 		if (counter >= step_count) {
 			gameTick();
-			animate();
+			renderer.render(scene, camera);
 			counter = 0;
 		}
 		counter++;
@@ -319,28 +321,36 @@ gameLoop();
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
 
+const loader = new THREE.TextureLoader();
+function loadColorTexture(path: string) {
+	const texture = loader.load(path);
+	texture.colorSpace = THREE.SRGBColorSpace;
+	return texture;
+}
+
+const snakeMaterial = new THREE.MeshBasicMaterial({ color: SNAKE_COLOR });
+const sceneMaterial = new THREE.MeshBasicMaterial({ map: loadColorTexture("public/cell.jpg") });
+const foodMaterial = new THREE.MeshBasicMaterial({ color: FOOD_COLOR });
+const cube = new THREE.BoxGeometry(1, 1, 1);
+
 const renderer = new THREE.WebGLRenderer();
 renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.setAnimationLoop(animate);
 document.body.appendChild(renderer.domElement);
 
-const geometry = new THREE.BoxGeometry(1, 1, 1);
-const material = new THREE.MeshBasicMaterial({ color: 0x34c9eb });
-
 const cubes = [];
-for (let i = 0; i < 10; i++) {
+for (let i = 0; i < BLOCKS_DIM_COUNT; i++) {
 	let arr = [];
-	for (let j = 0; j < 10; j++) {
-		arr.push(new THREE.Mesh(geometry, material));
+	for (let j = 0; j < BLOCKS_DIM_COUNT; j++) {
+		arr.push(new THREE.Mesh(cube, sceneMaterial));
 		arr[j].position.set(i, j, 0);
 		scene.add(arr[j]);
 	}
 	cubes.push(arr);
 }
 
-camera.position.set(5, -5, 5);
-camera.lookAt(5, 5, 0);
-
-function animate() {
-	renderer.render(scene, camera);
-}
+camera.position.set(
+	HALF_BLOCKS_DIM_COUNT + 1,
+	-HALF_BLOCKS_DIM_COUNT + 2,
+	HALF_BLOCKS_DIM_COUNT + 2
+);
+camera.lookAt(HALF_BLOCKS_DIM_COUNT + 1, HALF_BLOCKS_DIM_COUNT + 1, 0);
