@@ -1,5 +1,10 @@
-const BLOCK_SIZE = 25;
+import * as THREE from "three";
+
+const BLOCKS_DIM_COUNT = 20;
 const MOVES_PER_SECOND = 8;
+const SCENE_COLOR = 0x34c9eb;
+const SNAKE_COLOR = 0x3aeb34;
+const FOOD_COLOR = 0xeb3434;
 
 enum Direction {
 	Up,
@@ -47,6 +52,7 @@ class SnakeBody {
 
 class Snake {
 	direction: Direction;
+	nextDirection: Direction;
 	body: Array<SnakeBody>;
 	size: number;
 	speed: number;
@@ -54,9 +60,10 @@ class Snake {
 
 	constructor(x: number, y: number) {
 		this.direction = Direction.None;
+		this.nextDirection = Direction.None;
 		this.body = [];
-		this.size = BLOCK_SIZE;
-		this.speed = BLOCK_SIZE;
+		this.size = 1;
+		this.speed = 1;
 
 		this.body.push(new SnakeBody(x, y));
 	}
@@ -70,6 +77,8 @@ class Snake {
 	};
 
 	checkCollisions = (): void => {
+		if (!this.alive) return;
+
 		// Self collision:
 		// Don't need to check self collisions if snake length < 4
 		for (let i = 3; i < this.body.length; i++) {
@@ -97,24 +106,35 @@ class Snake {
 
 	die = (): void => {
 		this.alive = false;
+		// remove snake parts that aren't active yet
+		this.body = this.body.filter((cell) => cell.active === 0);
 	};
 
 	setDirection = (direction: Direction): void => {
-		if (this.body.length === 1) this.direction = direction;
+		if (this.body.length === 1) {
+			this.direction = direction;
+			return;
+		}
 		// Don't allow for opposite movement if snake is longer than just a head
 		if (
 			(this.direction === Direction.Up || this.direction === Direction.Down) &&
 			(direction === Direction.Left || direction === Direction.Right)
 		) {
-			this.direction = direction;
+			this.nextDirection = direction;
 		} else if (
 			(this.direction === Direction.Left || this.direction === Direction.Right) &&
 			(direction === Direction.Up || direction === Direction.Down)
 		) {
-			this.direction = direction;
+			this.nextDirection = direction;
 		}
 	};
 	move = (): void => {
+		// update direction if needed
+		if (this.nextDirection !== Direction.None) {
+			this.direction = this.nextDirection;
+			this.nextDirection = Direction.None;
+		}
+
 		// for death animation:
 		if (!this.alive) {
 			for (let i = 0; i < this.body.length; i++) {
@@ -161,8 +181,8 @@ type foodPositions = {
 // calculating each time.
 function createFood() {
 	let possible_pts: foodPositions = {};
-	for (let i = 0; i < canvas.width; i += BLOCK_SIZE) {
-		for (let j = 0; j < canvas.height; j += BLOCK_SIZE) {
+	for (let i = 0; i < BLOCKS_DIM_COUNT; i += 1) {
+		for (let j = 0; j < BLOCKS_DIM_COUNT; j += 1) {
 			let pos = new Point(i, j);
 			possible_pts[pos.toStr()] = true;
 		}
@@ -230,14 +250,17 @@ function gameDraw() {
 	// draw food
 	ctx!.fillStyle = "red";
 	foodArr.forEach((cell) => {
-		ctx?.fillRect(cell.x, cell.y, BLOCK_SIZE, BLOCK_SIZE);
+		ctx?.fillRect(cell.x, cell.y, 1, 1);
 	});
 
 	// draw snake
-	ctx!.fillStyle = "green";
 	const snakeBody: Array<SnakeBody> = player.body;
 	snakeBody.forEach((cell) => {
-		if (cell.active === -1) ctx!.fillStyle = "gray";
+		if (cell.active === -1) {
+			ctx!.fillStyle = "gray";
+		} else {
+			ctx!.fillStyle = "green";
+		}
 		ctx?.fillRect(cell.pos.x, cell.pos.y, player.size, player.size);
 	});
 }
@@ -254,7 +277,7 @@ function gameTick() {
 		if (
 			collisionBoundingBox(
 				{ x: snakeHead.x, y: snakeHead.y, w: player.size, h: player.size },
-				{ x: curFood.x, y: curFood.y, w: BLOCK_SIZE, h: BLOCK_SIZE }
+				{ x: curFood.x, y: curFood.y, w: 1, h: 1 }
 			)
 		) {
 			player.body.push(new SnakeBody(curFood.x, curFood.y, player.body.length));
@@ -274,4 +297,50 @@ function gameTick() {
 for (let i = 0; i < 5; i++) {
 	createFood();
 }
-setInterval(gameTick, Math.floor(1000 / MOVES_PER_SECOND));
+
+function gameLoop() {
+	// typically 60 frames per second
+	let counter = 0;
+	let step_count = Math.floor(60 / MOVES_PER_SECOND);
+	function loop() {
+		if (counter >= step_count) {
+			gameTick();
+			animate();
+			counter = 0;
+		}
+		counter++;
+		requestAnimationFrame(loop);
+	}
+	requestAnimationFrame(loop);
+}
+
+gameLoop();
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+
+const renderer = new THREE.WebGLRenderer();
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setAnimationLoop(animate);
+document.body.appendChild(renderer.domElement);
+
+const geometry = new THREE.BoxGeometry(1, 1, 1);
+const material = new THREE.MeshBasicMaterial({ color: 0x34c9eb });
+
+const cubes = [];
+for (let i = 0; i < 10; i++) {
+	let arr = [];
+	for (let j = 0; j < 10; j++) {
+		arr.push(new THREE.Mesh(geometry, material));
+		arr[j].position.set(i, j, 0);
+		scene.add(arr[j]);
+	}
+	cubes.push(arr);
+}
+
+camera.position.set(5, -5, 5);
+camera.lookAt(5, 5, 0);
+
+function animate() {
+	renderer.render(scene, camera);
+}
