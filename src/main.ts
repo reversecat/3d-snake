@@ -1,10 +1,34 @@
 import * as THREE from "three";
+import { BoxGeometry, Mesh, MeshBasicMaterial, Object3DEventMap } from "three";
 
 const BLOCKS_DIM_COUNT = 15;
 const HALF_BLOCKS_DIM_COUNT = Math.floor(BLOCKS_DIM_COUNT / 2);
 const MOVES_PER_SECOND = 8;
 const SNAKE_COLOR = 0x3aeb34;
+const SNAKE_DEATH_COLOR = 0x595959;
 const FOOD_COLOR = 0xeb3434;
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+
+const loader = new THREE.TextureLoader();
+function loadColorTexture(path: string) {
+	const texture = loader.load(path);
+	texture.colorSpace = THREE.SRGBColorSpace;
+	return texture;
+}
+
+const snakeMaterial = new THREE.MeshBasicMaterial({ map: loadColorTexture("/snake.jpg") });
+const snakeDeathMaterial = new THREE.MeshBasicMaterial({
+	map: loadColorTexture("/snakeDeath.jpg"),
+});
+const sceneMaterial = new THREE.MeshBasicMaterial({ map: loadColorTexture("/cell.jpg") });
+const foodMaterial = new THREE.MeshBasicMaterial({ color: FOOD_COLOR });
+const cube = new THREE.BoxGeometry(1, 1, 1);
+
+const renderer = new THREE.WebGLRenderer();
+renderer.setSize(window.innerWidth, window.innerHeight);
+document.body.appendChild(renderer.domElement);
 
 enum Direction {
 	Up,
@@ -12,6 +36,7 @@ enum Direction {
 	Down,
 	Left,
 	None,
+	Falling,
 }
 
 class Point {
@@ -45,11 +70,30 @@ function collisionBoundingBox(r1: Rect, r2: Rect): boolean {
 class SnakeBody {
 	pos: Point;
 	active: number; // if 0 is active, otherwise its a postive number that decrements each tick
+	three_obj: Mesh<BoxGeometry, MeshBasicMaterial, Object3DEventMap>;
 
 	constructor(x: number, y: number, active: number = 0) {
-		this.pos = new Point(x, y);
+		this.pos = new Point(x, y, 1);
 		this.active = active;
+		this.three_obj = new THREE.Mesh(cube, snakeMaterial);
+		this.three_obj.position.set(this.pos.x, this.pos.y, this.pos.z);
+		scene.add(this.three_obj);
 	}
+
+	updatePos = (): void => {
+		this.three_obj.position.set(this.pos.x, this.pos.y, this.pos.z);
+	};
+
+	dieEffect = (): void => {
+		scene.remove(this.three_obj);
+		this.three_obj = new THREE.Mesh(cube, snakeDeathMaterial);
+		this.three_obj.position.set(this.pos.x, this.pos.y, 1);
+		scene.add(this.three_obj);
+	};
+
+	delete = (): void => {
+		scene.remove(this.three_obj);
+	};
 }
 
 class Snake {
@@ -95,24 +139,34 @@ class Snake {
 			if (collisionBoundingBox(rect1, rect2)) this.die();
 		}
 
-		// Off screen collision:
+		// Off screen death:
 		if (
 			this.getHead().x < 0 ||
-			this.getHead().x >= canvas.width ||
+			this.getHead().x >= BLOCKS_DIM_COUNT ||
 			this.getHead().y < 0 ||
-			this.getHead().y >= canvas.height
+			this.getHead().y >= BLOCKS_DIM_COUNT
 		) {
 			this.die();
+			this.direction = Direction.Falling;
+			this.nextDirection = Direction.None;
 		}
 	};
 
 	die = (): void => {
 		this.alive = false;
+		// need to remove inactive snake parts from scene
+		this.body
+			.filter((cell) => cell.active !== 0)
+			.forEach((cell) => {
+				cell.delete();
+			});
 		// remove snake parts that aren't active yet
 		this.body = this.body.filter((cell) => cell.active === 0);
+		setTimeout(resetGame, 3000);
 	};
 
 	setDirection = (direction: Direction): void => {
+		if (!this.alive) return;
 		if (this.body.length === 1) {
 			this.direction = direction;
 			return;
@@ -138,10 +192,11 @@ class Snake {
 		}
 
 		// for death animation:
-		if (!this.alive) {
+		if (!this.alive && this.direction != Direction.Falling) {
 			for (let i = 0; i < this.body.length; i++) {
 				if (this.body[i].active != -1) {
 					this.body[i].active = -1;
+					this.body[i].dieEffect();
 					return;
 				}
 			}
@@ -153,6 +208,8 @@ class Snake {
 			if (this.body[i].active === 0) {
 				this.body[i].pos.x = this.body[i - 1].pos.x;
 				this.body[i].pos.y = this.body[i - 1].pos.y;
+				this.body[i].pos.z = this.body[i - 1].pos.z;
+				this.body[i].updatePos();
 			} else {
 				this.body[i].active--;
 			}
@@ -160,24 +217,47 @@ class Snake {
 		// Move snake head
 		switch (this.direction) {
 			case Direction.Up:
-				this.getHead().y -= this.speed;
+				this.getHead().y += this.speed;
 				break;
 			case Direction.Right:
 				this.getHead().x += this.speed;
 				break;
 			case Direction.Down:
-				this.getHead().y += this.speed;
+				this.getHead().y -= this.speed;
 				break;
 			case Direction.Left:
 				this.getHead().x -= this.speed;
 				break;
+			case Direction.Falling:
+				this.getHead().z -= this.speed;
+				break;
 		}
+		this.body[0].updatePos();
 	};
 }
 
 type foodPositions = {
 	[key: string]: boolean;
 };
+
+class Food {
+	pos: Point;
+	three_obj: Mesh<BoxGeometry, MeshBasicMaterial, Object3DEventMap>;
+
+	constructor(x: number, y: number) {
+		this.pos = new Point(x, y);
+		this.three_obj = new THREE.Mesh(cube, foodMaterial);
+		this.three_obj.position.set(this.pos.x, this.pos.y, 1);
+		scene.add(this.three_obj);
+	}
+
+	delete = (): void => {
+		scene.remove(this.three_obj);
+	};
+}
+
+let player = new Snake(0, 0);
+let foodArr: Array<Food> = [];
 
 // TODO: Function can be optimized by keeping a global state of available positions and simply removing 1 as snake moves vs
 // calculating each time.
@@ -199,8 +279,8 @@ function createFood() {
 
 	// Remove overlapping points with Food (in-case you want multiple food on map)
 	foodArr.forEach((cell) => {
-		if (cell.toStr() in possible_pts) {
-			delete possible_pts[cell.toStr()];
+		if (cell.pos.toStr() in possible_pts) {
+			delete possible_pts[cell.pos.toStr()];
 		}
 	});
 
@@ -211,17 +291,10 @@ function createFood() {
 	if (possible_pts_arr.length <= 0) throw new Error("No possible points for food");
 
 	let random_pos: string = possible_pts_arr[Math.floor(Math.random() * possible_pts_arr.length)];
-	let new_food = new Point(
-		parseInt(random_pos.split(",")[0]),
-		parseInt(random_pos.split(",")[1])
-	);
+
+	let new_food = new Food(parseInt(random_pos.split(",")[0]), parseInt(random_pos.split(",")[1]));
 	foodArr.push(new_food);
 }
-
-const canvas = <HTMLCanvasElement>document.getElementById("game");
-const ctx = canvas.getContext("2d");
-const player = new Snake(0, 0);
-let foodArr: Array<Point> = [];
 
 window.addEventListener(
 	"keydown",
@@ -245,32 +318,8 @@ window.addEventListener(
 	true
 );
 
-function gameDraw() {
-	ctx!.fillStyle = "black";
-	ctx?.fillRect(0, 0, canvas.width, canvas.height);
-
-	// draw food
-	ctx!.fillStyle = "red";
-	foodArr.forEach((cell) => {
-		ctx?.fillRect(cell.x, cell.y, 1, 1);
-	});
-
-	// draw snake
-	const snakeBody: Array<SnakeBody> = player.body;
-	snakeBody.forEach((cell) => {
-		if (cell.active === -1) {
-			ctx!.fillStyle = "gray";
-		} else {
-			ctx!.fillStyle = "green";
-		}
-		ctx?.fillRect(cell.pos.x, cell.pos.y, player.size, player.size);
-	});
-}
-
 // Game loop
 function gameTick() {
-	gameDraw();
-
 	// check food collisions
 	let removeIdx = -1;
 	for (let i = 0; i < foodArr.length; i++) {
@@ -279,15 +328,16 @@ function gameTick() {
 		if (
 			collisionBoundingBox(
 				{ x: snakeHead.x, y: snakeHead.y, w: player.size, h: player.size },
-				{ x: curFood.x, y: curFood.y, w: 1, h: 1 }
+				{ x: curFood.pos.x, y: curFood.pos.y, w: 1, h: 1 }
 			)
 		) {
-			player.body.push(new SnakeBody(curFood.x, curFood.y, player.body.length));
+			player.body.push(new SnakeBody(curFood.pos.x, curFood.pos.y, player.body.length));
 			removeIdx = i;
 			break;
 		}
 	}
 	if (removeIdx !== -1) {
+		foodArr[removeIdx].delete(); // remove food from three scene first
 		foodArr.splice(removeIdx, 1);
 		createFood();
 	}
@@ -296,8 +346,28 @@ function gameTick() {
 	player.move();
 }
 
-for (let i = 0; i < 5; i++) {
-	createFood();
+function resetGame() {
+	// Clear three scene
+	foodArr.forEach((cell) => cell.delete());
+	player.body.forEach((cell) => cell.delete());
+
+	const cubes = [];
+	for (let i = 0; i < BLOCKS_DIM_COUNT; i++) {
+		let arr = [];
+		for (let j = 0; j < BLOCKS_DIM_COUNT; j++) {
+			arr.push(new THREE.Mesh(cube, sceneMaterial));
+			arr[j].position.set(i, j, 0);
+			scene.add(arr[j]);
+		}
+		cubes.push(arr);
+	}
+
+	player = new Snake(0, 0);
+	foodArr = [];
+
+	for (let i = 0; i < 5; i++) {
+		createFood();
+	}
 }
 
 function gameLoop() {
@@ -316,37 +386,8 @@ function gameLoop() {
 	requestAnimationFrame(loop);
 }
 
+resetGame();
 gameLoop();
-
-const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-
-const loader = new THREE.TextureLoader();
-function loadColorTexture(path: string) {
-	const texture = loader.load(path);
-	texture.colorSpace = THREE.SRGBColorSpace;
-	return texture;
-}
-
-const snakeMaterial = new THREE.MeshBasicMaterial({ color: SNAKE_COLOR });
-const sceneMaterial = new THREE.MeshBasicMaterial({ map: loadColorTexture("public/cell.jpg") });
-const foodMaterial = new THREE.MeshBasicMaterial({ color: FOOD_COLOR });
-const cube = new THREE.BoxGeometry(1, 1, 1);
-
-const renderer = new THREE.WebGLRenderer();
-renderer.setSize(window.innerWidth, window.innerHeight);
-document.body.appendChild(renderer.domElement);
-
-const cubes = [];
-for (let i = 0; i < BLOCKS_DIM_COUNT; i++) {
-	let arr = [];
-	for (let j = 0; j < BLOCKS_DIM_COUNT; j++) {
-		arr.push(new THREE.Mesh(cube, sceneMaterial));
-		arr[j].position.set(i, j, 0);
-		scene.add(arr[j]);
-	}
-	cubes.push(arr);
-}
 
 camera.position.set(
 	HALF_BLOCKS_DIM_COUNT + 1,
