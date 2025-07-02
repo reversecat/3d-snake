@@ -29,13 +29,13 @@ function loadColorTexture(path: string) {
 }
 
 const snakeMaterial = new THREE.MeshBasicMaterial({
-	map: loadColorTexture("/snake.jpg"),
+	map: loadColorTexture("snake.jpg"),
 });
 const snakeDeathMaterial = new THREE.MeshBasicMaterial({
-	map: loadColorTexture("/snakeDeath.jpg"),
+	map: loadColorTexture("snakeDeath.jpg"),
 });
 const sceneMaterial = new THREE.MeshBasicMaterial({
-	map: loadColorTexture("/cell.jpg"),
+	map: loadColorTexture("cell.jpg"),
 });
 const foodMaterial = new THREE.MeshBasicMaterial({ color: FOOD_COLOR });
 const cube = new THREE.BoxGeometry(1, 1, 1);
