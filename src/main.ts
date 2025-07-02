@@ -1,15 +1,25 @@
 import * as THREE from "three";
-import { BoxGeometry, Mesh, MeshBasicMaterial, Object3DEventMap } from "three";
+import {
+	BoxGeometry,
+	Mesh,
+	MeshBasicMaterial,
+	Object3DEventMap,
+} from "three";
 
 const BLOCKS_DIM_COUNT = 15;
 const HALF_BLOCKS_DIM_COUNT = Math.floor(BLOCKS_DIM_COUNT / 2);
 const MOVES_PER_SECOND = 8;
-const SNAKE_COLOR = 0x3aeb34;
-const SNAKE_DEATH_COLOR = 0x595959;
+// const SNAKE_COLOR = 0x3aeb34;
+// const SNAKE_DEATH_COLOR = 0x595959;
 const FOOD_COLOR = 0xeb3434;
 
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+const camera = new THREE.PerspectiveCamera(
+	75,
+	window.innerWidth / window.innerHeight,
+	0.1,
+	1000
+);
 
 const loader = new THREE.TextureLoader();
 function loadColorTexture(path: string) {
@@ -18,11 +28,15 @@ function loadColorTexture(path: string) {
 	return texture;
 }
 
-const snakeMaterial = new THREE.MeshBasicMaterial({ map: loadColorTexture("/snake.jpg") });
+const snakeMaterial = new THREE.MeshBasicMaterial({
+	map: loadColorTexture("/snake.jpg"),
+});
 const snakeDeathMaterial = new THREE.MeshBasicMaterial({
 	map: loadColorTexture("/snakeDeath.jpg"),
 });
-const sceneMaterial = new THREE.MeshBasicMaterial({ map: loadColorTexture("/cell.jpg") });
+const sceneMaterial = new THREE.MeshBasicMaterial({
+	map: loadColorTexture("/cell.jpg"),
+});
 const foodMaterial = new THREE.MeshBasicMaterial({ color: FOOD_COLOR });
 const cube = new THREE.BoxGeometry(1, 1, 1);
 
@@ -61,7 +75,12 @@ interface Rect {
 }
 
 function collisionBoundingBox(r1: Rect, r2: Rect): boolean {
-	if (r1.x + r1.w > r2.x && r1.x < r2.x + r2.w && r1.y + r1.h > r2.y && r1.y < r2.y + r2.h) {
+	if (
+		r1.x + r1.w > r2.x &&
+		r1.x < r2.x + r2.w &&
+		r1.y + r1.h > r2.y &&
+		r1.y < r2.y + r2.h
+	) {
 		return true;
 	}
 	return false;
@@ -129,7 +148,12 @@ class Snake {
 		// Don't need to check self collisions if snake length < 4
 		for (let i = 3; i < this.body.length; i++) {
 			if (this.body[i].active !== 0) continue; // since new pieces stay at head until snake moves past
-			const rect1 = { x: this.getHead().x, y: this.getHead().y, w: this.size, h: this.size };
+			const rect1 = {
+				x: this.getHead().x,
+				y: this.getHead().y,
+				w: this.size,
+				h: this.size,
+			};
 			const rect2 = {
 				x: this.body[i].pos.x,
 				y: this.body[i].pos.y,
@@ -173,12 +197,15 @@ class Snake {
 		}
 		// Don't allow for opposite movement if snake is longer than just a head
 		if (
-			(this.direction === Direction.Up || this.direction === Direction.Down) &&
-			(direction === Direction.Left || direction === Direction.Right)
+			(this.direction === Direction.Up ||
+				this.direction === Direction.Down) &&
+			(direction === Direction.Left ||
+				direction === Direction.Right)
 		) {
 			this.nextDirection = direction;
 		} else if (
-			(this.direction === Direction.Left || this.direction === Direction.Right) &&
+			(this.direction === Direction.Left ||
+				this.direction === Direction.Right) &&
 			(direction === Direction.Up || direction === Direction.Down)
 		) {
 			this.nextDirection = direction;
@@ -288,11 +315,18 @@ function createFood() {
 
 	// TODO: Handle no more space for food
 
-	if (possible_pts_arr.length <= 0) throw new Error("No possible points for food");
+	if (possible_pts_arr.length <= 0)
+		throw new Error("No possible points for food");
 
-	let random_pos: string = possible_pts_arr[Math.floor(Math.random() * possible_pts_arr.length)];
+	let random_pos: string =
+		possible_pts_arr[
+			Math.floor(Math.random() * possible_pts_arr.length)
+		];
 
-	let new_food = new Food(parseInt(random_pos.split(",")[0]), parseInt(random_pos.split(",")[1]));
+	let new_food = new Food(
+		parseInt(random_pos.split(",")[0]),
+		parseInt(random_pos.split(",")[1])
+	);
 	foodArr.push(new_food);
 }
 
@@ -327,11 +361,22 @@ function gameTick() {
 		const snakeHead = player.getHead();
 		if (
 			collisionBoundingBox(
-				{ x: snakeHead.x, y: snakeHead.y, w: player.size, h: player.size },
+				{
+					x: snakeHead.x,
+					y: snakeHead.y,
+					w: player.size,
+					h: player.size,
+				},
 				{ x: curFood.pos.x, y: curFood.pos.y, w: 1, h: 1 }
 			)
 		) {
-			player.body.push(new SnakeBody(curFood.pos.x, curFood.pos.y, player.body.length));
+			player.body.push(
+				new SnakeBody(
+					curFood.pos.x,
+					curFood.pos.y,
+					player.body.length
+				)
+			);
 			removeIdx = i;
 			break;
 		}
